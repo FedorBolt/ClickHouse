@@ -433,6 +433,9 @@ IProcessor::Status SortingAggregatedTransform::prepare()
         }
 
         auto chunk = in->pull();
+        /// If chunk was pulled, then we need data from this port.
+        need_data = true;
+
         addChunk(std::move(chunk));
     }
 
