@@ -134,7 +134,7 @@ IProcessor::Status AggregatingTransform::prepare()
     if (is_consume_finished && !is_generate_initialized)
         return Status::Ready;
 
-    if (is_generate_initialized && !is_pipeline_created)
+    if (is_generate_initialized && !is_pipeline_created && !processors.empty())
         return Status::ExpandPipeline;
 
     /// Only possible while consuming.
@@ -216,6 +216,8 @@ void AggregatingTransform::initGenerate()
     if (is_generate_initialized)
         return;
 
+    is_generate_initialized = true;
+
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (variants.empty() && params->params.keys_size == 0 && !params->params.empty_result_for_aggregation_by_empty_set)
@@ -287,8 +289,6 @@ void AggregatingTransform::initGenerate()
 
         processors.insert(processors.end(), pipe.begin(), pipe.end());
     }
-
-    is_generate_initialized = true;
 }
 
 }
