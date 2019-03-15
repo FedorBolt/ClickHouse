@@ -78,11 +78,12 @@ private:
     size_t num_inputs;
     AggregatingTransformParamsPtr params;
     std::vector<Int32> last_bucket_number;
+    std::vector<bool> is_input_finished;
     std::map<Int32, Chunk> chunks;
     Chunk overflow_chunk;
 
     bool tryPushChunk();
-    void addChunk(Chunk chunk);
+    void addChunk(Chunk chunk, size_t from_input);
 };
 
 /// Creates piece of pipeline which performs memory efficient merging of partially aggregated data from several sources.

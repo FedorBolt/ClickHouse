@@ -338,6 +338,7 @@ SortingAggregatedTransform::SortingAggregatedTransform(size_t num_inputs, Aggreg
     , num_inputs(num_inputs)
     , params(std::move(params))
     , last_bucket_number(num_inputs, -1)
+    , is_input_finished(num_inputs, false)
 {
 }
 
@@ -345,22 +346,25 @@ bool SortingAggregatedTransform::tryPushChunk()
 {
     auto & output = outputs.front();
 
-    Int32 min_bucket = last_bucket_number[0];
-    for (auto & bucket : last_bucket_number)
-        min_bucket = std::min<Int32>(min_bucket, bucket);
+    if (chunks.empty())
+        return false;
 
-    auto it = chunks.find(min_bucket);
-    if (it != chunks.end())
-    {
-        output.push(std::move(it->second));
-        chunks.erase(it);
-        return true;
-    }
+    /// Chunk with min current bucket.
+    auto it = chunks.begin();
+    auto cur_bucket = it->first;
 
-    return false;
+    /// Check that can push it
+    size_t num_inputs = inputs.size();
+    for (size_t input = 0; input < num_inputs; ++input)
+        if (!is_input_finished[input] && last_bucket_number[input] < cur_bucket)
+            return false;
+
+    output.push(std::move(it->second));
+    chunks.erase(it);
+    return true;
 }
 
-void SortingAggregatedTransform::addChunk(Chunk chunk)
+void SortingAggregatedTransform::addChunk(Chunk chunk, size_t from_input)
 {
     auto & info = chunk.getChunkInfo();
     if (!info)
@@ -382,6 +386,7 @@ void SortingAggregatedTransform::addChunk(Chunk chunk)
                     ErrorCodes::LOGICAL_ERROR);
 
         chunks[bucket] = std::move(chunk);
+        last_bucket_number[from_input] = bucket;
     }
 }
 
@@ -420,7 +425,10 @@ IProcessor::Status SortingAggregatedTransform::prepare()
     for (size_t input_num = 0; input_num < num_inputs; ++input_num, ++in)
     {
         if (in->isFinished())
+        {
+            is_input_finished[input_num] = true;
             continue;
+        }
 
         all_finished = false;
 
@@ -436,7 +444,7 @@ IProcessor::Status SortingAggregatedTransform::prepare()
         /// If chunk was pulled, then we need data from this port.
         need_data = true;
 
-        addChunk(std::move(chunk));
+        addChunk(std::move(chunk), input_num);
     }
 
     if (pushed_to_output)
